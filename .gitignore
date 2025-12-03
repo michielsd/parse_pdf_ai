@@ -1,0 +1,23 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# environment variables
+.env
+
+# Environment packages and data folders
+jsons/
+pickles/
+test_begrotingen/
+
+# Data storage
+.json
+.pdf
+.pickle
