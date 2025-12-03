@@ -6,8 +6,8 @@ import base64
 import pprint
 from PIL import Image
 
-PDF_FOLDER = "C:/Dashboard/Werk/llm_kengetallen/new_ed/test_begrotingen/"
-OUTPUT_FOLDER = "C:/Dashboard/Werk/llm_kengetallen/new_ed/jsons/"
+PDF_FOLDER = "C:/Dashboard/Werk/llm_kengetallen/parse_pdf_ai/test_begrotingen/"
+OUTPUT_FOLDER = "C:/Dashboard/Werk/llm_kengetallen/parse_pdf_ai/jsons/"
 
 
 def main():
@@ -16,11 +16,26 @@ def main():
 
         if info["pdf_type"] == "Text-based PDF":
 
-            hits = find_kengetallen(info["page_contents"])
-            pages = [p['page'] for p in hits['relevant_pages']]
-            output = save_to_json(hits, pdf_name, OUTPUT_FOLDER)
+            kg = find_kengetallen(info["page_contents"])
+            mjr = find_meerjarenraming(info["page_contents"])
+            gpb = find_geprognosticeerde_balans(info["page_contents"])
+            
+            kg_pages = [p['page'] for p in kg['relevant_pages']]
+            mjr_pages = [p['page'] for p in mjr['relevant_pages']]
+            gpb_pages = [p['page'] for p in gpb['relevant_pages']]
+            
+            output = save_to_json(kg, "kg", pdf_name, OUTPUT_FOLDER)
+            output = save_to_json(mjr, "mjr", pdf_name, OUTPUT_FOLDER)
+            output = save_to_json(gpb, "gpb", pdf_name, OUTPUT_FOLDER)
+            
             print(
-                f"[INFO] pages {pages} of {pdf_name} saved to JSON"
+                f"[INFO] pages {kg_pages} of {pdf_name} saved to JSON"
+            )
+            print(
+                f"[INFO] pages {mjr_pages} of {pdf_name} saved to JSON"
+            )
+            print(
+                f"[INFO] pages {gpb_pages} of {pdf_name} saved to JSON"
             )
 
 
@@ -108,6 +123,40 @@ def analyze_pdf(path):
 
     return findings
 
+def find_geprognosticeerde_balans(page_contents):
+    
+    keywords = [
+        "geprognosticeerde balans",
+        "balans",
+        "vermogenspositie"
+        "financiële positie"
+        "meerjarenbalans",
+        "activa",
+        "passiva",
+        "eigen vermogen",
+    ]
+    
+    relevant_pages = []
+    
+    # Start at 2/3 of the way through the document
+    length_of_page_contents = len(page_contents)
+    start_page = int(2* (length_of_page_contents / 3))
+    
+    for page_content in page_contents:
+        if page_content["text"] and page_content["page"] >= start_page:
+         
+            table_text = table_to_text(page_content["tables"])
+            
+            if any(k in page_content["text"] or k in table_text for k in keywords):
+                relevant_pages.append(page_content["page"])
+    
+    relevant_pages_content = [
+        page for page in page_contents if page["page"] in relevant_pages
+    ]            
+    
+    return {
+        "relevant_pages": relevant_pages_content,
+    }
 
 def find_meerjarenraming(page_contents):
     
@@ -117,7 +166,33 @@ def find_meerjarenraming(page_contents):
         "meerjarenbeeld",
         "begroting",
         "baten en lasten",
+        "baten totaal",
+        "lasten totaal",
+        "totaal baten",
+        "totaal lasten",
     ]
+    
+    relevant_pages = []
+    
+    # Start at 2/3 of the way through the document
+    length_of_page_contents = len(page_contents)
+    start_page = int(2* (length_of_page_contents / 3))
+    
+    for page_content in page_contents:
+        if page_content["text"] and page_content["page"] >= start_page:
+         
+            table_text = table_to_text(page_content["tables"])
+            
+            if any(k in page_content["text"] or k in table_text for k in keywords):
+                relevant_pages.append(page_content["page"])
+    
+    relevant_pages_content = [
+        page for page in page_contents if page["page"] in relevant_pages
+    ]            
+    
+    return {
+        "relevant_pages": relevant_pages_content,
+    }
 
 def find_kengetallen(page_contents):
     title = "weerstandsvermogen en risicobeheersing"
@@ -177,11 +252,11 @@ def find_kengetallen(page_contents):
     return model_dicts
 
 
-def save_to_json(pages_of_interest, pdf_name, output_folder):
+def save_to_json(pages_of_interest, type_of_info, pdf_name, output_folder):
 
     bg_content = None
     bg_images = None
-    if pages_of_interest["best_guess"]:
+    if 'best_guess' in pages_of_interest and pages_of_interest["best_guess"]:
         bg_content = process_page(pages_of_interest["best_guess"])['content']
         bg_images = process_page(pages_of_interest["best_guess"])['images']
 
@@ -201,7 +276,7 @@ def save_to_json(pages_of_interest, pdf_name, output_folder):
 
     model_data_json = json.dumps(model_data, ensure_ascii=False)
     # File names start with GM code
-    output_name = pdf_name[:4]
+    output_name = type_of_info + "_" + pdf_name[:4]
     with open(os.path.join(output_folder, f"{output_name}.json"),
               "w",
               encoding="utf-8") as f:
