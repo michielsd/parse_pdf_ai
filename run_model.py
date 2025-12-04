@@ -7,6 +7,7 @@ import numpy as np
 from openai import OpenAI
 import pandas as pd
 import tiktoken
+import re
 
 from get_instruction import get_kengetallen_instruction, get_meerjarenraming_instruction, get_geprognosticeerde_balans_instruction, complete_json_instruction
 
@@ -26,45 +27,28 @@ def main():
     client = OpenAI()
     
     # Loop through JSONs
-    print(os.listdir(INPUT_FOLDER))
     for gm in os.listdir(INPUT_FOLDER):
         gm_key = gm[:-5]
         
-        if gm_key.startswith("kg_"):
+        """
+        if gm_key.startswith("kg_") and gm_key + ".pickle" not in os.listdir(OUTPUT_FOLDER):
             with open(INPUT_FOLDER + gm, "r", encoding="utf-8") as f:
                 model_input = json.load(f)
             
-            kengetallen = get_kengetallen(client, model_input, KG_JAAR_RANGE)
-            if not is_empty(kengetallen):
-                kengetallen.to_pickle(OUTPUT_FOLDER + f"kg_{gm_key}.pickle")
-                print(gm_key, kengetallen)
-                print(f"[INFO] kengetallen of {gm_key} saved to pickle")
-            else:
-                print(f"[ERROR] kengetallen of {gm_key} not found")
-            
+            process_and_save(gm_key, OUTPUT_FOLDER, get_kengetallen(client, model_input, KG_JAAR_RANGE))
+                            
         elif gm_key.startswith("mjr_"):
             with open(INPUT_FOLDER + gm, "r", encoding="utf-8") as f:
                 model_input = json.load(f)
             
-            meerjarenraming = get_meerjarenraming(client, model_input, MJR_JAAR_RANGE)
-            if not is_empty(meerjarenraming):
-                meerjarenraming.to_pickle(OUTPUT_FOLDER + f"mjr_{gm_key}.pickle")
-                print(gm_key, meerjarenraming)
-                print(f"[INFO] meerjarenraming of {gm_key} saved to pickle")
-            else:
-                print(f"[ERROR] meerjarenraming of {gm_key} not found")
+            process_and_save(gm_key, OUTPUT_FOLDER, get_meerjarenraming(client, model_input, MJR_JAAR_RANGE))
         
-        elif gm_key.startswith("gpb_"):
+        """
+        if gm_key.startswith("gpb_") and gm_key + ".pickle" not in os.listdir(OUTPUT_FOLDER):
             with open(INPUT_FOLDER + gm, "r", encoding="utf-8") as f:
                 model_input = json.load(f)
             
-            gpb = get_geprognosticeerde_balans(client, model_input, GPB_JAAR_RANGE)
-            if not is_empty(gpb):
-                gpb.to_pickle(OUTPUT_FOLDER + f"gpb_{gm_key}.pickle")
-                print(gm_key, gpb)
-                print(f"[INFO] gpb of {gm_key} saved to pickle")
-            else:
-                print(f"[ERROR] geprognosticeerde balans of {gm_key} not found")
+            process_and_save(gm_key, OUTPUT_FOLDER, get_geprognosticeerde_balans(client, model_input, GPB_JAAR_RANGE))
 
 def get_kengetallen(client, model_input, jaar_range):
     
@@ -121,8 +105,6 @@ def get_meerjarenraming(client, model_input, jaar_range):
 
 def get_geprognosticeerde_balans(client, model_input, jaar_range):
     
-    # MOET ANDERS
-    
     # Hard coded
     text_instruction = get_geprognosticeerde_balans_instruction(jaar_range, "text")
     image_instruction = get_geprognosticeerde_balans_instruction(jaar_range, "images")
@@ -141,8 +123,36 @@ def get_geprognosticeerde_balans(client, model_input, jaar_range):
     if is_empty(output):
         output = get_json_output(client, rp_images, "images", image_instruction)
         
-    df = pd.DataFrame.from_dict(output, orient='columns')
-    return df
+    flat = pd.json_normalize(output)
+    
+    tidy = []
+    for col in flat.columns:
+        parts = col.split(".")
+        year = None
+        for p in parts:
+            if re.fullmatch(r"\d{4}", p):
+                year = p
+                break
+            
+        if year is None:
+            # skip
+            continue
+
+         # category = everything except the year
+        category_parts = [p for p in parts if p != year]
+        category = " / ".join(category_parts)
+
+        value = flat[col].iloc[0]
+        tidy.append([category, year, value])
+    
+    df = pd.DataFrame(tidy, columns=["category", "year", "value"])
+    
+    result = df.pivot_table(index="category", columns="year", values="value")
+    
+    # Sort year columns numerically
+    result = result.reindex(sorted(result.columns, key=int), axis=1)
+    
+    return result
     
 
 def run_model(client, model_input, input_type, instruction):
@@ -184,6 +194,8 @@ def get_json_output(client, model_input, input_type, instruction):
         complete_output = run_model(client, model_output, input_type, complete_json_instruction(model_output))
         json_output = json.loads(complete_output)
     
+    print(json_output)
+    
     return json_output
 
 def is_empty(json_output):
@@ -208,6 +220,14 @@ def chunk_text(text_input, instruction, model="gpt-4o"):
         chunks.append(text_chunk)
     
     return chunks
+
+def process_and_save(gm_key, output_folder, function_result):
+    if not is_empty(function_result):
+        function_result.to_pickle(output_folder + f"{gm_key}.pickle")
+        print(gm_key, function_result)
+        print(f"[INFO] {gm_key} saved to pickle")
+    else:
+        print(f"[ERROR] {gm_key} not found")
 
 if __name__ == "__main__":
     main()

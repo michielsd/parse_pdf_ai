@@ -294,7 +294,7 @@ def get_geprognosticeerde_balans_instruction(jaar_range, text_or_images):
     no escape characters like \n or \").
     - Do not add any extra explanation, comments, or markdown.
     - The response should be in a format that can be converted into a pandas dataframe through 
-    pd.DataFrame.from_dict(data, orient='index')
+    pd.DataFrame.from_dict(data, orient='columns')
     - If something cannot be determined, fill in null.
     """
     
