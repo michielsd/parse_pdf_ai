@@ -16,6 +16,8 @@ wheels/
 jsons/
 pickles/
 test_begrotingen/
+temp/
+pdfs/
 
 # Data storage
 .json

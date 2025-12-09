@@ -6,7 +6,7 @@ import base64
 import pprint
 from PIL import Image
 
-PDF_FOLDER = "C:/Dashboard/Werk/llm_kengetallen/parse_pdf_ai/test_begrotingen/"
+PDF_FOLDER = "C:/Dashboard/Werk/llm_kengetallen/parse_pdf_ai/pdfs/"
 OUTPUT_FOLDER = "C:/Dashboard/Werk/llm_kengetallen/parse_pdf_ai/jsons/"
 
 
@@ -29,13 +29,13 @@ def main():
             output = save_to_json(gpb, "gpb", pdf_name, OUTPUT_FOLDER)
             
             print(
-                f"[INFO] pages {kg_pages} of {pdf_name} saved to JSON"
+                f"[INFO] kengetallen pages {kg_pages} of {pdf_name} saved to JSON"
             )
             print(
-                f"[INFO] pages {mjr_pages} of {pdf_name} saved to JSON"
+                f"[INFO] mjr pages {mjr_pages} of {pdf_name} saved to JSON"
             )
             print(
-                f"[INFO] pages {gpb_pages} of {pdf_name} saved to JSON"
+                f"[INFO] balans pages {gpb_pages} of {pdf_name} saved to JSON"
             )
 
 
@@ -237,6 +237,10 @@ def find_kengetallen(page_contents):
 
     relevant_pages_numbers = set(v for v in relevant_pages.values()
                                  if v is not None)
+    
+    if len(relevant_pages_numbers) == 0:
+        relevant_pages_numbers = [0, len(page_contents)]
+    
     relevant_range = range(min(relevant_pages_numbers),
                            max(relevant_pages_numbers) + 10)  # Can be altered
 
